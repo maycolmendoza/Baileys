@@ -3,6 +3,10 @@ from responder import responder
 
 app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "Bot active"
+
 @app.route('/responder', methods=['POST'])
 def manejar():
     pregunta = request.json.get('texto', '')
