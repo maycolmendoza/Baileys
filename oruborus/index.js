@@ -1,5 +1,5 @@
-const { default: makeWASocket, useSingleFileAuthState } = require("@whiskeysockets/baileys");
-const { state, saveState } = useSingleFileAuthState('./auth.json');
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
+const { state, saveState } = useMultiFileAuthState('./auth.json');
 const axios = require("axios");
 
 async function iniciar() {
