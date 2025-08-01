@@ -1,31 +1,48 @@
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
-const axios = require("axios");
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const axios = require('axios');
+const { Boom } = require('@hapi/boom');
 
-async function iniciar() {
-    // ✅ Esperamos el estado de sesión correctamente
+async function iniciarBot() {
+    const { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState('./auth');
 
-    // ✅ Iniciamos el socket con el auth correcto
-    const sock = makeWASocket({ auth: state });
+    const sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: true,  // 🔁 ESTO HACE QUE MUESTRE EL QR
+    });
 
-    // ✅ Guardamos credenciales si cambian
     sock.ev.on('creds.update', saveCreds);
 
-    // ✅ Escuchamos mensajes entrantes
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('📴 Conexión cerrada. Reintentando...', shouldReconnect);
+            if (shouldReconnect) {
+                iniciarBot();
+            }
+        } else if (connection === 'open') {
+            console.log('✅ Conectado a WhatsApp');
+        }
+    });
+
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
-        if (!m.message) return;
+        if (!m.message || m.key.fromMe) return;
 
         const texto = m.message.conversation || "";
         const numero = m.key.remoteJid;
 
+        console.log(`📩 Mensaje recibido: "${texto}" de ${numero}`);
+
         try {
             const res = await axios.post("http://localhost:5000/responder", { texto });
             await sock.sendMessage(numero, { text: res.data.respuesta });
-        } catch (e) {
-            console.error("Error al conectar con el backend:", e.message);
+        } catch (error) {
+            console.error("❌ Error en la respuesta del backend:", error.message);
         }
     });
 }
 
-iniciar();
+iniciarBot();
